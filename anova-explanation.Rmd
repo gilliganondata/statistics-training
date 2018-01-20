@@ -229,7 +229,64 @@ gg_channel_detail
 
 ```
 
+And, show what the underlying data could look like for that:
 
+```{r detailed_data_faux, message=FALSE, echo=FALSE}
+
+# The number of rows of faux data
+num_rows <- 15
+
+# Display the first part of the underlying data...sort of. We're going to fake it for this.
+# Start by grabbing X random rows.
+user_detail_sample <- ga_data_detailed %>% 
+  sample_n(num_rows) %>% 
+  select(channelGrouping)
+
+# Function to generate faux IDs
+gen_ids <- function(channel_grouping){
+  id_parts <- runif(2, min=1000000000, max=9999999999)
+  id_parts <- round(id_parts,0)
+  faux_id <- paste0(id_parts, collapse = ".")
+}
+
+# Generate faux IDs
+faux_ids <- sapply(user_detail_sample$channelGrouping, gen_ids)
+
+# Put those faux ids into the faux data data frame
+user_detail_sample$visit_id <- faux_ids
+
+# Rearrange and rename the columns
+user_detail_sample <- user_detail_sample %>% 
+  select('Visit ID' = visit_id, Channel = channelGrouping)
+
+kable(user_detail_sample, row.name=FALSE, format = "html") %>% 
+  kable_styling(bootstrap_options = c("striped","condensed"), full_width = FALSE)
+
+```
+
+And... let's take that same data and show it with dummy variables:
+
+```{r echo=FALSE, message=FALSE}
+
+# Add a column with "1" for every cell, and then spread
+# to get dummy variables created
+user_detail_sample_dummies <- user_detail_sample %>% 
+  mutate(flag = 1) %>% 
+  spread(Channel, flag)
+
+# Flip all the NAs to be 0s
+user_detail_sample_dummies[is.na(user_detail_sample_dummies)] <- 0
+
+# We actually want to keep this in the same order as the original list (by Visit ID), so
+# do a join
+user_detail_sample_dummies <- left_join(user_detail_sample, user_detail_sample_dummies) %>% 
+  select(-Channel)
+
+kable(user_detail_sample_dummies, row.name=FALSE, format = "html") %>% 
+  kable_styling(bootstrap_options = c("striped","condensed"), full_width = FALSE)
+
+
+```
 
 ## Trend by Channel = Messy
 
@@ -259,7 +316,8 @@ gg_line_all
 # Show the data
 ga_channel_day_formatted <- ga_channel_day %>%
   mutate(sessions = format(sessions, big.mark=",")) %>% 
-  select(channelGrouping, date, sessions)
+  select(channelGrouping, date, sessions) %>% 
+  filter(channelGrouping == "Social")
 
 names(ga_channel_day_formatted) <- c("Channel Grouping", "Date", "Sessions")
 
@@ -273,7 +331,7 @@ kable(head(ga_channel_day_formatted, 15),
 
 Now... a histogram...and then density plots.
 
-```{r histograms, message=FALSE, echo=FALSE}
+```{r histograms, message=FALSE, echo=FALSE, fig.height = 5, fig.width=10}
 
 # Overall histogram
 gg_hist_overall <- ggplot(ga_channel_day, mapping = aes(x = sessions)) +
@@ -304,38 +362,38 @@ gg_density_overall
 
 ```
 
-## Histogram and Density Plot for Organic Search
+## Histogram and Density Plot for Social
 
-```{r histograms_os, message=FALSE, echo=FALSE}
+```{r histograms_os, message=FALSE, echo=FALSE, fig.height = 5, fig.width=10}
 
-ga_organic_search_day <- ga_channel_day %>%
-  filter(channelGrouping == "Organic Search")
+ga_social_day <- ga_channel_day %>%
+  filter(channelGrouping == "Social")
 
-# Organic Search histogram
-gg_hist_organicsearch <- ggplot(ga_organic_search_day, mapping = aes(x = sessions)) +
+# Social histogram
+gg_hist_social <- ggplot(ga_social_day, mapping = aes(x = sessions)) +
   geom_histogram(binwidth = 5000, fill="gray70", color="white", size=2) +
   scale_y_continuous(expand = c(0, 0), limits = c(0,16), breaks = seq(0,16, by=2)) +
   scale_x_continuous(label = comma, limits = c(0,30000), breaks = seq(0, 100000, by=5000)) +
-  labs(y = "# of Observations", x ="Organic Search Sessions") +
+  labs(y = "# of Observations", x ="Social Sessions") +
   theme_histogram
 
-gg_hist_organicsearch
+gg_hist_social
 
-# Organic Search density plot
+# Social density plot
 
 # We're going to want to scale ylim just a smidge, so have to calculate the
 # density on its own first
-ps_density_os <- density(ga_organic_search_day$sessions)
+ps_density_os <- density(ga_social_day$sessions)
 
 # Now...make the plot
-gg_density_organicsearch <- ggplot(ga_organic_search_day, mapping = aes(x = sessions)) +
+gg_density_social <- ggplot(ga_social_day, mapping = aes(x = sessions)) +
   geom_density(fill="gray70" , size=0) +
   scale_y_continuous(expand = c(0,0), limits = c(0, max(ps_density_os$y)*1.02)) +
   scale_x_continuous(label = comma, breaks = seq(0, 30000, by=5000), limits = c(0,30000)) +
-  labs(x ="Organic Search Sessions") +
+  labs(x ="Social Sessions") +
   theme_densityplot 
 
-gg_density_organicsearch
+gg_density_social
 
 ```
 
@@ -343,7 +401,7 @@ gg_density_organicsearch
 ## Now... Show All vs. Individual Density Plots (Horizontally)
 
 
-```{r histograms-horizontal, message=FALSE, echo=FALSE}
+```{r histograms-horizontal, message=FALSE, echo=FALSE, fig.height = 5, fig.width=10}
 
 # All data -- density plot
 
@@ -371,7 +429,7 @@ gg_density_all <- ggplot(ga_channel_day_and_all, mapping = aes(x = sessions)) +
   geom_hline(yintercept=0) +
   facet_grid(. ~ channelGrouping, scales="free_x") +
   scale_y_continuous(expand = c(0,0)) +
-  scale_x_continuous(label = comma) +
+  scale_x_continuous(label = comma, breaks = seq(0, 30000, by=5000)) +
     guides(colour=guide_legend(nrow=1)) +
     scale_colour_brewer(palette="Dark2") +
   labs(x = "Sessions") +
@@ -379,10 +437,11 @@ gg_density_all <- ggplot(ga_channel_day_and_all, mapping = aes(x = sessions)) +
   theme_densityplot_h +
   theme(legend.position = "none",
         axis.line.y = element_line(),
-        axis.title.y = element_text(size = 22),
+        axis.title.y = element_text(size = 16),
+        axis.text.y = element_text(size=14),
         strip.background = element_rect(fill = NA, colour = NA),
         strip.text.x = element_text(colour = "black", size = 14, 
-                                    face = "bold", vjust=0, hjust=0))
+                                    face = "bold", vjust=0, hjust=0.5))
 
 gg_density_all
 
@@ -393,7 +452,7 @@ density_means <- ga_channel_day_and_all %>%
 
 gg_density_with_means <- gg_density_all +
   geom_vline(data = density_means, mapping = aes(xintercept = mean),
-             linetype = "1121", size=1.5, colour="gray30")
+             linetype = "11", size=1, colour="gray30")
 
 gg_density_with_means
 
@@ -401,50 +460,19 @@ gg_density_with_means
 ```
 
 
-Now... boxplots
 
-```{r boxplot,  message=FALSE, echo=FALSE}
-
-##########
-# Make a function to do a boxplot -- we're going to do several
-
-make_boxplot <- function(df){
-  
-  ggplot(df, aes(x = channelGrouping, y = sessions)) +
-  stat_boxplot(geom ='errorbar', width = 0.5, color = "gray50") +
-  geom_boxplot(colour = "gray50",
-               size = 0.4) +
-  geom_boxplot(aes(ymin=..lower.., ymax=..upper..), 
-               fill="gray80", colour="white",
-               size = 0.5,
-               outlier.colour = "blue",
-               outlier.size = 1) + 
-  xlab("(Daily) Sessions") +
-  scale_y_continuous(label = comma, expand=c(0,0), limits=c(0,max(df$sessions) * 1.04)) +
-  coord_flip() +
-  theme_bar +
-  theme(panel.grid.major.x = element_line(colour="gray80"),
-        axis.text.x = element_text(size = 14, face="plain", color="gray40"),
-        axis.text.y = element_text(size = 14),
-        axis.line.y = element_line(color="gray20"))
-  
-}
-
-
-# Plot both sets of data
-boxplot <- make_boxplot(ga_channel_day %>% 
-                          mutate(channelGrouping = factor(channelGrouping,
-                                                          levels = rev(ga_channel_total$channelGrouping))))
-boxplot
-
-```
-
-Run a 1-way ANOVA, perform a post hoc Tukey analysis, and then visualize which channels are related to each other.
+Run a 1-way ANOVA
 
 ```{r anova, message=FALSE, echo=FALSE}
 
 channels_aov <- aov(ga_channel_day$sessions ~ ga_channel_day$channelGrouping)
 summary(channels_aov)
+
+```
+
+Perform a post hoc Tukey analysis, and then visualize which channels are related to each other.
+
+```{r tukey, message=FALSE, echo=FALSE}
 
 channels_posthoc <- TukeyHSD(x=channels_aov, 'ga_channel_day$channelGrouping', conf.level=0.95)
 
@@ -467,19 +495,14 @@ channels_posthoc_df <- channels_posthoc_df %>%
   mutate(channel_1 = gsub(" ","\n", channel_1),
          channel_2 = gsub(" ","\n", channel_2))
 
+# Order it in a way that will show up cleanly.
 channels_posthoc_df$channel_1 = factor(channels_posthoc_df$channel_1,
-                                       levels = c("Social", "Direct",
-                                                  "Paid\nSearch", "Referral",
-                                                  "Organic\nSearch"))
+                                       levels = c("Referral", "Email", "Display",
+                                                  "Direct", "Social", "Organic\nSearch"))
 
 channels_posthoc_df$channel_2 = factor(channels_posthoc_df$channel_2,
-                                       levels = c("Display", "Organic\nSearch",
-                                                  "Referral","Paid\nSearch",
-                                                  "Direct"))
-
-
-# Spread it out and see what happens
-# foo <- spread(channels_posthoc_df, channel_2, `p adj`)
+                                       levels = c("Paid\nSearch", "Organic\nSearch",
+                                                  "Social", "Direct", "Display", "Email"))
 
 # Make a heatmap...
 gg_posthoc <- ggplot(channels_posthoc_df, aes(x=channel_1, y=channel_2)) +

@@ -52,7 +52,7 @@ theme_sparklines <- theme_bw() +
 
 theme_histogram <- default_theme +
   theme(axis.text.y = element_text(size = 14, face = "plain", margin = margin(0,5,0,5, unit="pt")),
-        axis.text.x = element_text(size = 12, margin = margin(10,0,5, unit="pt"), hjust=1, vjust=0.5),
+        axis.text.x = element_text(size = 12, margin = margin(10,0,5, unit="pt")),
         axis.line.x = element_line(),
         axis.title = element_text(size=16, face = "bold"),
         plot.margin=unit(c(10,30,10,30), "pt"))
@@ -75,7 +75,7 @@ theme_densityplot <- theme_histogram +
 theme_densityplot_h <- theme_histogram +
   theme(axis.title.x = element_blank(),
         axis.text.x = element_blank(),
-        axis.text.y = element_text(size = 18, margin = margin(l=0.5, r=0.5, unit="cm")),
+        axis.text.y = element_text(size = 14, margin = margin(l=0.5, r=0.5, unit="cm")),
         panel.grid.major.x = element_blank(),
         panel.grid.major.y = element_blank())
 # ,
