@@ -48,7 +48,7 @@ theme_sparklines <- theme_bw() +
         panel.grid.major = element_blank(),
         panel.grid.minor = element_blank(),
         panel.spacing = unit(0,"in"),
-        panel.background = element_rect(fill = NA, color = "gray90"))
+        panel.background = element_rect(fill = NA, color = NA))
 
 theme_histogram <- default_theme +
   theme(axis.text.y = element_text(size = 14, face = "plain", margin = margin(0,5,0,5, unit="pt")),
@@ -80,3 +80,8 @@ theme_densityplot_h <- theme_histogram +
         panel.grid.major.y = element_blank())
 # ,
 #         axis.line.y.left = element_line())
+
+# Theme for the Holt-Winters forecast charts
+theme_hw <- default_theme +
+  theme(axis.text.x = element_blank(),
+        axis.text.y = element_text(size = 14))
