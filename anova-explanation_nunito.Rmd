@@ -1,0 +1,565 @@
+---
+title: "ANOVA"
+output: html_notebook
+fig_width: 10 
+fig_height: 5 
+---
+
+<style>
+    th, td {font-family: Nunito;}
+</style>
+
+
+This builds an example that, ultimately, will go into a number of slides to illustrate a number of points. This uses data from CKF from April 2018.
+
+The narrative:
+- Trended by day (overall)
+- Totals by channel (bar chart)
+- Which of these channels are really different?
+- Trended by day by channel
+
+- I can eyeball it… but machines need to be more concrete.
+:
+
+- Line chart by channel
+- Remove the “time” aspect of date
+- Remove lines... just show as points
+- Overall histogram
+- Rotated overall histogram
+- Back to overall line chart to show y-axis is the same
+- Back to rotated overall histogram
+- Rotated overall density plot
+- Channel breakouts added
+- Add means
+
+
+```{r setup, echo=FALSE, message=FALSE}
+# Get Google Analytics credentials and set them. 
+ga_client_id <- Sys.getenv("GA_CLIENT_ID")
+ga_client_secret <- Sys.getenv("GA_CLIENT_SECRET")
+
+options(googleAuthR.client_id = ga_client_id)
+options(googleAuthR.client_secret = ga_client_secret) 
+
+packages <- c("tidyverse","googleAnalyticsR", "splitstackshape", "knitr", "kableExtra", "extrafont", "tools", "scales")
+if (length(setdiff(packages, rownames(installed.packages()))) > 0) {
+  install.packages(setdiff(packages, rownames(installed.packages())))  
+}
+
+library(tidyverse)
+library(googleAnalyticsR)
+library(splitstackshape)
+library(knitr)
+library(kableExtra)
+library(extrafont)
+library(tools)
+library(scales)
+
+# Get the themes
+source("scripts/themes_nunito.R")
+
+# Set up dates
+end_date <- as.Date("2018-04-30")
+start_date <- as.Date("2018-04-01")
+date_range <- c(start_date, end_date)
+
+# Channels to include and the order to use them. You'll have to look at the data first
+# before deciding what to put in here.
+include_channels <- c("Organic Search", "Generic Paid Search", "Direct", "Branded Paid Search",
+                      "Display", "Social", "Referral")
+
+# Authorize Google Analytics
+ga_auth()
+
+# There needs to be a variable in .Renviron called GA_EXAMPLE_VIEW_ID
+view_id <- Sys.getenv("GA_VIEW_ID_CKF")
+
+# Pull the data we'll use and set up the basis for the different visualizations. Go ahead
+# and make both sets of results in title case.
+ga_all <- google_analytics(view_id,
+                              date_range = date_range,
+                              metrics = "sessions",
+                              dimensions = c("date","channelGrouping"),
+                              anti_sample = TRUE) %>%
+  mutate(channelGrouping = toTitleCase(channelGrouping))
+
+# Keep just the channels of interest
+ga_all <- ga_all %>% 
+  filter(channelGrouping %in% include_channels)
+
+
+# Remove oddball channels
+# ga_all <- ga_all %>%
+#   filter(channelGrouping != "(Other)")
+
+# Save the data... so we won't have to pull it again.
+saveRDS(ga_all, "ga_all_nunito.rds")
+
+# Read in the data (if it's not there, uncomment the above and pull it in)
+ga_all <- readRDS("ga_all_nunito.rds")
+
+# Put in selective line breaks
+ga_all <- ga_all %>% 
+  mutate(channelGrouping = gsub(" Paid", "\nPaid", channelGrouping)) %>% 
+  mutate(channelGrouping = gsub("Organic Search", "Organic\nSearch", channelGrouping))
+
+# Calculate the total.
+ga_total <- sum(ga_all$sessions)
+
+# Get the totals by channel so we can then use that to convert others
+# to factors that have a meaningful order
+ga_channel_total <- ga_all %>% 
+  group_by(channelGrouping) %>% 
+  summarise(sessions = sum(sessions)) %>% 
+  arrange(-sessions)
+
+# Roll up to just channel daily data (remove deviceGrouping). Go ahead and
+# get zeros in for any day that a channel has no data by spreading and 
+# then gathering
+ga_channel_day <- ga_all %>% 
+  group_by(date,channelGrouping) %>% 
+  summarise(sessions = sum(sessions)) %>% 
+  spread(channelGrouping, sessions, fill = 0) %>% 
+  gather(channelGrouping, sessions, -date) %>% 
+  mutate(channelGrouping = factor(channelGrouping,
+                                  levels = ga_channel_total$channelGrouping))
+
+```
+
+## Aggregate Number
+
+Total sessions: 
+```{r, echo=FALSE, results='asis'} 
+cat("<b>",format(ga_total[[1]], big.mark=","),"</b>")
+```
+
+## Trended Overall by Day
+
+This is one super common way to dig in more deeply:
+
+```{r linechart, message=FALSE, echo=FALSE, fig.width=10, fig.height=5}
+
+# Set up the data for
+line_overall <- ga_channel_day %>%
+  group_by(date) %>% 
+  summarise(Sessions = sum(sessions))
+
+# Make a line chart for the totals
+gg_line_overall <- ggplot(line_overall, aes(x=date, y=Sessions)) +
+  geom_line(size = 1, colour="#00a2b1") +
+  scale_y_continuous(expand = c(0,0), limits = c(0, max(line_overall$Sessions) * 1.1), label = comma) +
+  labs(x="") +
+  theme_line
+
+gg_line_overall
+
+```
+
+## Bar Charts -- Channel
+
+Or... we can break down the totals by channel:
+
+```{r bar_channel, echo=FALSE, message=FALSE}
+
+# Split out to just the channel data
+ga_bars_channel <- ga_channel_total %>% 
+  mutate(channelGrouping = factor(channelGrouping, level=rev(channelGrouping)))
+
+# We need the bar labels to show up, so need to calculate the x-axis limits
+x_lims <-  c(0, max(ga_bars_channel$sessions) * 1.35)
+
+# figure out a good offset after the end of the bar to put the text.
+text_offset <- x_lims[2]/55
+
+# Generate the bar chart
+gg_channel <- ggplot(ga_bars_channel, mapping = aes(x = channelGrouping, y = sessions)) +
+  geom_bar(stat = "identity", fill = "#00a2b1", colour = "#00a2b1") +
+  geom_text(data = ga_bars_channel, mapping = aes(x=channelGrouping, y=sessions + text_offset,
+                                                   label=format(sessions, big.mark = ",")), size = 6,
+            family = "Nunito", hjust = 0, colour = "gray30") +
+  scale_y_continuous(expand = c(0, 0), limits = x_lims) +
+  theme_bar +
+  coord_flip()
+
+gg_channel
+
+```
+
+How a web analyst thinks about this data:
+
+```{r bar_channel_table_aggregated, echo=FALSE, message=FALSE}
+
+# Show a simple table. Various cleanup to make it look nice.
+
+ga_bars_channel_table <- ga_bars_channel %>% 
+    mutate(sessions = format(sessions, big.mark=","))
+
+names(ga_bars_channel_table) <- c("Channel", "Sessions")
+
+kable(ga_bars_channel_table, row.names = FALSE, format = "html", align=c("l","r")) %>% 
+  kable_styling(bootstrap_options = c("striped","condensed"), full_width = FALSE, font_size = 18)
+
+
+```
+
+## Bar Charts -- Channel -- Detailed Data Illustration
+
+Show how a data scientist might actually think of the data (as individual users aggregated).
+
+```{r detail_data, echo=FALSE, message=FALSE}
+# Convert the data into individual observations. expandRows takes the number of 
+# sessions and duplicates the rows that many times
+ga_data_detailed <- ga_bars_channel %>% 
+  expandRows("sessions")
+
+# channelGrouping is a factor, so we can put the y position for the
+# dot as the numeric of the channelGrouping factor. We're going to do a 
+# coord_flip, so this will get set as "x" but is, in actuality, the
+# y position.
+ga_data_detailed$y_pos <- as.numeric(ga_data_detailed$channelGrouping)
+
+# Want to go +/- 0.4 randomly from the center of the bar
+ga_data_detailed$y_offset <- runif(nrow(ga_data_detailed), min=-0.4, max=0.4)
+
+# Calculate the final y position
+ga_data_detailed$y_plot <- ga_data_detailed$y_pos + ga_data_detailed$y_offset
+
+# Now, we want to vary along the x-axis within the bar, too. We 
+# need to get a max for each bar, which is the number of sessions
+# for each channel
+ga_data_totals <- ga_data_detailed %>% 
+  group_by(channelGrouping) %>% 
+  summarise(channelTotal = n())
+
+# Add those totals back into the overall data
+ga_data_detailed <- ga_data_detailed %>% 
+  left_join(ga_data_totals) 
+
+ga_data_detailed$plot_sessions <- sapply(ga_data_detailed$channelTotal, 
+                                function(x) round(runif(1, min = 25, max = x - 25),0))
+
+# We don't want TOO many points to illustrate the point
+ga_data_sample <- sample_n(ga_data_detailed, 5000)
+
+# The bar chart with individual points
+gg_channel_detail <- gg_channel +
+  geom_point(mapping = aes(x = y_plot, y = plot_sessions), 
+             data = ga_data_sample,
+             size = 0.4, colour = "#FFFFFF", alpha = 0.7)
+
+gg_channel_detail
+
+```
+
+And, show what the underlying data could look like for that:
+
+```{r detailed_data_faux, message=FALSE, echo=FALSE}
+
+# The number of rows of faux data
+num_rows <- 15
+
+# Display the first part of the underlying data...sort of. We're going to fake it for this.
+# Start by grabbing X random rows.
+user_detail_sample <- ga_data_detailed %>% 
+  sample_n(num_rows) %>% 
+  select(channelGrouping)
+
+# Function to generate faux IDs
+gen_ids <- function(channel_grouping){
+  id_parts <- runif(2, min=1000000000, max=9999999999)
+  id_parts <- round(id_parts,0)
+  faux_id <- paste0(id_parts, collapse = ".")
+}
+
+# Generate faux IDs
+faux_ids <- sapply(user_detail_sample$channelGrouping, gen_ids)
+
+# Put those faux ids into the faux data data frame
+user_detail_sample$visit_id <- faux_ids
+
+# Rearrange and rename the columns
+user_detail_sample <- user_detail_sample %>% 
+  select('Visit ID' = visit_id, Channel = channelGrouping)
+
+kable(user_detail_sample, row.name=FALSE, format = "html") %>% 
+  kable_styling(bootstrap_options = c("striped","condensed"), full_width = FALSE, font_size = 18) %>% 
+  column_spec(1, width = "14em")
+
+```
+
+And... let's take that same data and show it with dummy variables (skipping this sor now)
+
+```{r echo=FALSE, message=FALSE}
+
+# # Add a column with "1" for every cell, and then spread
+# # to get dummy variables created
+# user_detail_sample_dummies <- user_detail_sample %>% 
+#   mutate(flag = 1) %>% 
+#   spread(Channel, flag)
+# 
+# # Flip all the NAs to be 0s
+# user_detail_sample_dummies[is.na(user_detail_sample_dummies)] <- 0
+# 
+# # We actually want to keep this in the same order as the original list (by Visit ID), so
+# # do a join
+# user_detail_sample_dummies <- left_join(user_detail_sample, user_detail_sample_dummies) %>% 
+#   select(-Channel)
+# 
+# kable(user_detail_sample_dummies, row.name=FALSE, format = "html") %>% 
+#   kable_styling(bootstrap_options = c("striped","condensed"), full_width = FALSE, font_size = 18)
+
+
+```
+
+## Trend by Channel = Messy
+
+```{r linechart-by-channel, message=FALSE, echo=FALSE, fig.height=6, fig.width=12}
+
+# Make a temp data frame that removes the line wrapping and tacks some space on at the end of
+# each channel grouping so the legend is less jacked
+ga_line_ordered <- ga_channel_day %>% 
+  mutate(channelGrouping = gsub("\n", " ", channelGrouping)) %>% 
+  mutate(channelGrouping = paste0(channelGrouping, "   "))
+
+# Make a line chart for all of the channels
+gg_line_all <- ggplot(ga_line_ordered, aes(x=date, y=sessions)) +
+  geom_line(size = 1, mapping = aes(colour = channelGrouping)) +
+    scale_y_continuous(expand = c(0,0), limits = c(0, max(ga_line_ordered$sessions) +100 ), label = comma) +
+  labs(x="", y = "Sessions") +
+  guides(colour=guide_legend(nrow=1, 
+                             keywidth=1,
+                             default.unit="cm",
+                             byrow = TRUE)) +
+  scale_colour_brewer(palette="Set1") +
+  theme_line +
+  theme(legend.text = element_text(size=14),
+        axis.line.x = element_line())
+
+gg_line_all
+
+```
+
+## What Does This Data Look Like?
+
+```{r deaggregated, message=FALSE, fig.width=10, fig.height=6, echo=FALSE}
+
+# Show the data
+ga_channel_day_formatted <- ga_channel_day %>%
+  mutate(sessions = format(sessions, big.mark=",")) %>% 
+  select(channelGrouping, date, sessions) %>% 
+  filter(channelGrouping == "Social")
+
+names(ga_channel_day_formatted) <- c("Channel", "Date", "Sessions")
+
+kable(head(ga_channel_day_formatted, 15), 
+      row.names = FALSE, format = "html", align=c("l","l","r")) %>%
+  kable_styling(bootstrap_options = c("striped","condensed"), full_width = FALSE, font_size = 18) %>% 
+  column_spec(1, width = "7em") %>% 
+  column_spec(2, width = "8em")
+
+```
+
+## Histogram and Density Plot - Overall
+
+Now... a histogram...and then density plots.
+
+```{r histograms, message=FALSE, echo=FALSE, fig.height = 5, fig.width=10}
+
+# Set the bin size
+bin_size = 500
+
+# Overall histogram
+gg_hist_overall <- ggplot(ga_channel_day, mapping = aes(x = sessions)) +
+  geom_histogram(binwidth = bin_size, fill="#00a2b1", color="white", size=2) +
+  scale_y_continuous(expand = c(0, 0)) +
+  scale_x_continuous(label = comma, breaks = seq(0, 5000, by=bin_size)) +
+  labs(y = "# of Observations", x ="Sessions") +
+  theme_histogram
+
+gg_hist_overall
+
+# Overall density plot
+
+# We're going to want to scale ylim just a smidge, so have to calculate the
+# density on its own first
+ps_density <- density(ga_channel_day$sessions)
+
+# Now...make the plot
+gg_density_overall <- ggplot(ga_channel_day, mapping = aes(x = sessions)) +
+  geom_density(fill="#00a2b1" , size=0) +
+  scale_y_continuous(expand = c(0,0), limits = c(0, max(ps_density$y)*1.02)) +
+  scale_x_continuous(label = comma, breaks = seq(0, 5000, by=bin_size)) +
+  labs(x ="Sessions") +
+  theme_densityplot 
+
+gg_density_overall
+
+```
+
+## Histogram and Density Plot for Generic Paid Search
+
+```{r histograms_os, message=FALSE, echo=FALSE, fig.height = 5, fig.width=10}
+
+ga_generic_paid_search_day <- ga_channel_day %>%
+  filter(channelGrouping == "Generic\nPaid Search")
+
+# Social histogram
+gg_hist_generic_paid_search <- ggplot(ga_generic_paid_search_day, mapping = aes(x = sessions)) +
+  geom_histogram(binwidth = bin_size, fill="gray70", color="white", size=2) +
+  scale_y_continuous(expand = c(0, 0), limits = c(0,25), breaks = seq(0,25, by=5)) +
+  scale_x_continuous(label = comma, limits = c(0, 4000), breaks = seq(0, 4000, by=bin_size)) +
+  labs(y = "# of Observations", x ="Generic Paid Search Sessions") +
+  theme_histogram
+
+gg_hist_generic_paid_search
+
+# Social density plot
+
+# We're going to want to scale ylim just a smidge, so have to calculate the
+# density on its own first
+ps_density_os <- density(ga_generic_paid_search_day$sessions)
+
+# Now...make the plot
+gg_density_generic_paid_search <- ggplot(ga_generic_paid_search_day, mapping = aes(x = sessions)) +
+  geom_density(fill="gray70" , size=0) +
+  scale_y_continuous(expand = c(0,0), limits = c(0, max(ps_density_os$y)*1.02)) +
+  scale_x_continuous(label = comma, limits = c(0, 4000), breaks = seq(0, 4000, by=bin_size)) +
+  labs(x ="Social Sessions") +
+  theme_densityplot 
+
+gg_density_generic_paid_search
+
+```
+
+
+## Now... Show All vs. Individual Density Plots (Horizontally)
+
+
+```{r histograms-horizontal, message=FALSE, echo=FALSE, fig.height = 5, fig.width=12}
+
+include_channels_breaks <- gsub(" Paid","\nPaid",include_channels) %>% 
+  gsub("Organic Search","Organic\nSearch",.)
+
+# All data -- density plot
+
+# We want to show the *OVERALL* distribution, so make a version of the data
+# where all of the channelGrouping labels get changed to "All" and then add
+# those rows to the original, channel-breakout data. And, add a line break
+# for the Search channels
+ga_channel_day_and_all <- ga_channel_day %>% 
+  mutate(channelGrouping = "All") %>%
+  rbind(ga_channel_day) %>% 
+  mutate(channelGrouping = gsub(" Paid","\nPaid",channelGrouping)) %>% 
+  mutate(channelGrouping = gsub("Organic Search","Organic\nSearch",channelGrouping)) %>% 
+  mutate(channelGrouping = factor(channelGrouping,
+                                  levels = c("All", 
+                                             include_channels_breaks)))
+                                             # gsub(" ","\n",ga_channel_total$channelGrouping))))
+
+
+# For the final chart, we want the All fill to be one color and then all
+# of the channels to be gray
+density_fill <- c("#00a2b1", rep("gray70", nrow(ga_bars_channel)))
+
+
+gg_density_all <- ggplot(ga_channel_day_and_all, mapping = aes(x = sessions)) +
+  geom_density(aes(fill = channelGrouping), size = 0) +
+  scale_fill_manual(values = density_fill) +
+  geom_hline(yintercept=0) +
+  facet_grid(. ~ channelGrouping, scales="free_x") +
+  scale_y_continuous(expand = c(0,0)) +
+  scale_x_continuous(label = comma, breaks = seq(0, 30000, by=5000)) +
+    guides(colour=guide_legend(nrow=1)) +
+    scale_colour_brewer(palette="Dark2") +
+  labs(x = "Sessions") +
+  coord_flip() +
+  theme_densityplot_h +
+  theme(legend.position = "none",
+        axis.line.y = element_line(),
+        axis.title.y = element_blank(),
+        axis.text.y = element_blank(),
+        strip.background = element_rect(fill = NA, colour = NA),
+        strip.text.x = element_text(colour = "black", size = 14, 
+                                    face = "bold", vjust=0, hjust=0.5))
+
+gg_density_all
+
+# Same plot...but add the means
+density_means <- ga_channel_day_and_all %>% 
+  group_by(channelGrouping) %>% 
+  summarise(mean = mean(sessions))
+
+gg_density_with_means <- gg_density_all +
+  geom_vline(data = density_means, mapping = aes(xintercept = mean),
+             linetype = "11", size=1, colour="gray30")
+
+gg_density_with_means
+
+
+```
+
+
+
+Run a 1-way ANOVA
+
+```{r anova, message=FALSE, echo=FALSE}
+
+channels_aov <- aov(ga_channel_day$sessions ~ ga_channel_day$channelGrouping)
+summary(channels_aov)
+
+```
+
+Perform a post hoc Tukey analysis, and then visualize which channels are related to each other.
+
+```{r tukey, message=FALSE, echo=FALSE}
+
+channels_posthoc <- TukeyHSD(x=channels_aov, 'ga_channel_day$channelGrouping', conf.level=0.95)
+
+# Extract the data frame with the detailed results and then get just down to
+# the channel combinations (the rownames) and the ajusted p values
+channels_posthoc_df <- channels_posthoc$`ga_channel_day$channelGrouping` %>% 
+  as.data.frame() %>% 
+  select(`p adj`)
+
+# Copy the rownames into their own column
+channels_posthoc_df$combos <- rownames(channels_posthoc_df) 
+
+# Split out the first and second values and put in a flag for significance:
+# p adj < 0.05
+channels_posthoc_df <- channels_posthoc_df %>% 
+  mutate(channel_1 = gsub("\\-.*$","",combos),
+         channel_2 = gsub("^.*\\-","", combos),
+         significant = ifelse(`p adj` < 0.05, 1, 0)) %>%
+  select(-combos) %>% 
+  mutate(channel_1 = gsub(" Paid","\nPaid", channel_1),
+         channel_2 = gsub(" Paid","\nPaid", channel_2)) %>% 
+  mutate(channel_1 = gsub("Organic Search","Organic\nSearch", channel_1),
+         channel_2 = gsub("Organic Search","Organic\nSearch", channel_2))
+
+# Order it in a way that will show up cleanly.
+channels_posthoc_df$channel_1 = factor(channels_posthoc_df$channel_1,
+                                       levels = rev(include_channels_breaks))
+                                       # levels = c("Referral", "Email", "Display",
+                                       #            "Direct", "Social", "Organic\nSearch"))
+
+channels_posthoc_df$channel_2 = factor(channels_posthoc_df$channel_2,
+                                       levels = include_channels_breaks)
+                                       # levels = c("Paid\nSearch", "Organic\nSearch",
+                                       #            "Social", "Direct", "Display", "Email"))
+
+# Make a heatmap...
+gg_posthoc <- ggplot(channels_posthoc_df, aes(x=channel_1, y=channel_2)) +
+  geom_tile(stat = "identity", aes(fill = significant), colour = "gray70", size = 0.5) +
+  scale_fill_gradient(low = "white", high = "#95FF85") +
+  # geom_text(aes(label = format(`p adj`, scientific = FALSE))) +
+  geom_text(aes(label = sprintf("%0.5f",round(`p adj`,5))), size = 6, colour="gray40") +
+  theme_heatmap +
+  theme(panel.grid.major.y = element_blank(),
+        axis.text.x = element_text(size=14, colour = "black", face = "bold"),
+        axis.text.y = element_text(size=14, colour = "black", face = "bold"),
+        legend.position = "none")
+
+gg_posthoc
+
+```
+
