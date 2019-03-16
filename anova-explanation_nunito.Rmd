@@ -146,7 +146,7 @@ line_overall <- ga_channel_day %>%
 
 # Make a line chart for the totals
 gg_line_overall <- ggplot(line_overall, aes(x=date, y=Sessions)) +
-  geom_line(size = 1, colour="#00a2b1") +
+  geom_line(size = 1, colour="#00ae4d") +
   scale_y_continuous(expand = c(0,0), limits = c(0, max(line_overall$Sessions) * 1.1), label = comma) +
   labs(x="") +
   theme_line
@@ -173,7 +173,7 @@ text_offset <- x_lims[2]/55
 
 # Generate the bar chart
 gg_channel <- ggplot(ga_bars_channel, mapping = aes(x = channelGrouping, y = sessions)) +
-  geom_bar(stat = "identity", fill = "#00a2b1", colour = "#00a2b1") +
+  geom_bar(stat = "identity", fill = "#00ae4d", colour = "#00ae4d") +
   geom_text(data = ga_bars_channel, mapping = aes(x=channelGrouping, y=sessions + text_offset,
                                                    label=format(sessions, big.mark = ",")), size = 6,
             family = "Nunito", hjust = 0, colour = "gray30") +
@@ -370,7 +370,7 @@ bin_size = 500
 
 # Overall histogram
 gg_hist_overall <- ggplot(ga_channel_day, mapping = aes(x = sessions)) +
-  geom_histogram(binwidth = bin_size, fill="#00a2b1", color="white", size=2) +
+  geom_histogram(binwidth = bin_size, fill="#00ae4d", color="white", size=2) +
   scale_y_continuous(expand = c(0, 0)) +
   scale_x_continuous(label = comma, breaks = seq(0, 5000, by=bin_size)) +
   labs(y = "# of Observations", x ="Sessions") +
@@ -386,7 +386,7 @@ ps_density <- density(ga_channel_day$sessions)
 
 # Now...make the plot
 gg_density_overall <- ggplot(ga_channel_day, mapping = aes(x = sessions)) +
-  geom_density(fill="#00a2b1" , size=0) +
+  geom_density(fill="#00ae4d" , size=0) +
   scale_y_continuous(expand = c(0,0), limits = c(0, max(ps_density$y)*1.02)) +
   scale_x_continuous(label = comma, breaks = seq(0, 5000, by=bin_size)) +
   labs(x ="Sessions") +
@@ -459,7 +459,7 @@ ga_channel_day_and_all <- ga_channel_day %>%
 
 # For the final chart, we want the All fill to be one color and then all
 # of the channels to be gray
-density_fill <- c("#00a2b1", rep("gray70", nrow(ga_bars_channel)))
+density_fill <- c("#00ae4d", rep("gray70", nrow(ga_bars_channel)))
 
 
 gg_density_all <- ggplot(ga_channel_day_and_all, mapping = aes(x = sessions)) +
