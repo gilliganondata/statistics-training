@@ -87,4 +87,6 @@ theme_densityplot_h <- theme_histogram +
 # Theme for the Holt-Winters forecast charts
 theme_hw <- default_theme +
   theme(axis.text.x = element_blank(),
-        axis.text.y = element_text(size = 14))
+        axis.text.y = element_text(size = 14),
+        axis.title.x = element_text(size = 10, hjust = 0.5),
+        axis.line.x = element_line(color = "gray50"))
