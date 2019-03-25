@@ -424,7 +424,7 @@ gg_density_generic_paid_search <- ggplot(ga_generic_paid_search_day, mapping = a
   geom_density(fill="gray70" , size=0) +
   scale_y_continuous(expand = c(0,0), limits = c(0, max(ps_density_os$y)*1.02)) +
   scale_x_continuous(label = comma, limits = c(0, 4000), breaks = seq(0, 4000, by=bin_size)) +
-  labs(x ="Social Sessions") +
+  labs(x ="Generic Paid Search Sessions") +
   theme_densityplot 
 
 gg_density_generic_paid_search

@@ -343,7 +343,8 @@ ga_plot <- ggplot(ga_data_plot, mapping = aes(x = time_period)) +
   geom_vline(aes(xintercept = cutoff_time_period), 
              color = "gray40", linetype = "dashed", size = 1) +
   geom_line(aes(y = ga_data_plot$fit), color = "gray50", linetype = "dotted", size = 1) +
-  scale_y_continuous(label=comma, expand = c(0, 0), limits = c(-1000, max_y)) +
+  scale_y_continuous(label=comma, expand = c(0, 0), limits = c(0, 30000)) +
+  labs(x= " ") +
   theme_hw
 
 ga_plot
@@ -360,7 +361,8 @@ ga_plot <- ggplot(ga_data_plot, mapping = aes(x = time_period)) +
   geom_vline(aes(xintercept = cutoff_time_period), 
              color = "gray40", linetype = "dashed", size = 1) +
   geom_line(aes(y = ga_data_plot$fit), color = "gray50", linetype = "dotted", size = 1) +
-  scale_y_continuous(label=comma, expand = c(0, 0), limits = c(-1000, max_y)) +
+  scale_y_continuous(label=comma, expand = c(0, 0), limits = c(0, 30000)) +
+  labs(x= " ") +
   theme_hw
 
 ga_plot
@@ -378,7 +380,8 @@ ga_plot <- ggplot(ga_data_plot, mapping = aes(x = time_period)) +
   geom_vline(aes(xintercept = cutoff_time_period), 
              color = "gray40", linetype = "dashed", size = 1) +
   geom_line(aes(y = ga_data_plot$fit), color = "gray50", linetype = "dotted", size = 1) +
-  scale_y_continuous(label=comma, expand = c(0, 0), limits = c(-1000, max_y)) +
+  scale_y_continuous(label=comma, expand = c(0, 0), limits = c(0, 30000)) +
+  labs(x= " ") +
   theme_hw
 
 ga_plot
@@ -396,7 +399,8 @@ ga_plot <- ggplot(ga_data_plot, mapping = aes(x = time_period)) +
   geom_vline(aes(xintercept = cutoff_time_period), 
              color = "gray40", linetype = "dashed", size = 1) +
   geom_line(aes(y = ga_data_plot$fit), color = "gray50", linetype = "dotted", size = 1) +
-  scale_y_continuous(label=comma, expand = c(0, 0), limits = c(-1000, max_y)) +
+  scale_y_continuous(label=comma, expand = c(0, 0), limits = c(0, 30000)) +
+  labs(x= " ") +
   theme_hw
 
 ga_plot
@@ -414,7 +418,8 @@ ga_plot <- ggplot(ga_data_plot, mapping = aes(x = time_period)) +
   geom_vline(aes(xintercept = cutoff_time_period), 
              color = "gray40", linetype = "dashed", size = 1) +
   geom_point(aes(y = ga_data_plot$anomaly), color = "#F58220", size = 2.5) +
-  scale_y_continuous(label=comma, expand = c(0, 0), limits = c(-1000, max_y)) +
+  scale_y_continuous(label=comma, expand = c(0, 0), limits = c(0, 30000)) +
+  labs(x= " ") +
   theme_hw
 
 ga_plot
