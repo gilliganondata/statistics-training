@@ -1,0 +1,124 @@
+---
+title: "Non-Stationary (Time) Correlation"
+output: html_notebook
+---
+
+Two data sets that both trend up over time...but appear to be highly correlated as a result if simply p
+
+```{r}
+library(tidyverse)
+library(scales)
+library(ggtext)
+library(knitr)
+
+df_djia <- read.csv("data/djia_2007_to_2021.csv", stringsAsFactors = FALSE)
+df_world_pop <- read.csv("data/world_pop_by_year.csv", stringsAsFactors = FALSE)
+
+# Sources: 
+# https://www.statista.com/statistics/183785/per-capita-consumption-of-cheese-in-the-us-since-2000/
+# https://www.macrotrends.net/1319/dow-jones-100-year-historical-chart
+df <- tibble(year = seq(2000, 2019),
+             us_cheese_per_capita = c(32.1, 32.4, 32.8, 32.9, 33.6, 34, 34.8, 35.2, 34.5, 34.6,
+                                      35, 35.3, 35.5, 35.6, 36.2, 37.2, 38.5, 39, 40, 40.4),
+             djia_dec = c(17001.87, 15553.48, 12645.91, 15555.43, 15538.32, 14940.2, 16937.42,
+                          17323.85, 11453.19, 13243.62, 14495.04, 14856.55, 15659.45, 19510.73,
+                          20817.35, 20213.03, 22450.31, 27512.49, 25473.59, 30450.42))
+
+```
+
+Cleanup...
+
+```{r cleanup}
+
+# df <- df_djia %>% 
+#   mutate(Date = as.POSIXct(Date, tryFormat = "%b %d, %Y"),
+#          Year = format(Date, format = "%Y") %>% as.numeric(),
+#          Price = gsub(",", "", Price) %>% as.numeric()) %>% 
+#   select(year = Year, Date, Price) %>% 
+#   arrange(year, Date) %>% 
+#   group_by(year) %>% 
+#   summarise(djia_price = last(Price)) %>% 
+#   ungroup() %>% 
+#   filter(year != 2021) %>% 
+#   left_join(df_world_pop)
+
+```
+
+Basic scatterplot.
+
+```{r scatter, fig.height = 2, fig.width = 2.7}
+kable(df)
+
+theme_main <-  theme_minimal() +
+  theme(text = element_text("Lato"),
+        axis.title = element_blank(),
+        axis.line = element_line(color = "gray60"))
+
+# Dual axes are bad, but doing them here anyway. They're a mess to do in ggplot to
+# really show what we want to do here. Taking this approach from:
+# http://rstudio-pubs-static.s3.amazonaws.com/329613_f53e84d1a18840d5a1df55efb90739d9.html
+range_djia_dec <- range(df$djia_dec)
+range_us_cheese <- range(df$us_cheese_per_capita)
+scale_factor <-  diff(range_djia_dec) / diff(range_us_cheese)
+df$scaled_cheese <- (df$us_cheese_per_capita - range_us_cheese[1]) * scale_factor +
+  range_djia_dec[1]
+trans <- ~ ((. - range_djia_dec[1]) / scale_factor) + range_us_cheese[1]
+
+ggplot(df, aes(x = year)) +
+  geom_line(aes(y = djia_dec), color = "#009CAB") +
+  geom_line(aes(y = scaled_cheese), color = "#EF7d22") +
+  scale_y_continuous(labels = comma, sec.axis = sec_axis(trans = trans)) +
+  theme_main +
+  theme(axis.text.y.left = element_text(color = "#009CAB"),
+        axis.text.y.right = element_text(color = "#EF7D22"),
+        axis.line.y.right = element_blank())
+
+# Scatterplot without legend titles
+gg_scatter <- ggplot(df, aes(x = us_cheese_per_capita, y = djia_dec)) +
+  geom_point(color = "#00727C") +
+  scale_y_continuous(labels = comma) +
+  theme_main
+
+gg_scatter
+
+# Add axis titles to show that it's really spurious
+gg_scatter +
+  labs(x = "U.S. Cheese Consumption (Lbs.) per Capita",
+       y = "Dow Jones Industrial Average (December)") +
+  theme(axis.title = element_text(size = 12, face = "bold", color = "#9A248F"))
+
+# Single line trending to explain stationarity
+ggplot(df, aes(x = year)) +
+  geom_line(aes(y = us_cheese_per_capita), color = "#EF7D22", size = 0.8) +
+  theme_main +
+  theme(axis.line.y = element_blank(),
+        axis.text.y = element_blank())
+
+```
+## First Difference
+
+```{r first_diff, fig.height = 2, fig.width = 2.7}
+
+# Calc first differences
+df <- df %>% 
+  mutate(fd_us_cheese = us_cheese_per_capita - lag(us_cheese_per_capita, 1),
+         fd_djia_dec = djia_dec - lag(djia_dec, 1))
+
+# Scatterplot without legend titles
+gg_scatter_fd <- ggplot(df, aes(x = fd_us_cheese, y = fd_djia_dec)) +
+  geom_point(color = "#00727C") +
+  scale_y_continuous(labels = comma) +
+  labs(x = "First Difference: U.S. Cheese Consumption (Lbs.) per Capita",
+       y = "First Difference: Dow Jones Industrial Average (Dec.)") +
+  theme_main +
+  theme(axis.title = element_text(size = 12, face = "bold", color = "#9A248F"))
+
+gg_scatter_fd
+
+df_first_diff <- df %>% filter(!is.na(fd_us_cheese))
+
+```
+
+R^2 for the raw values is `r cor(df$us_cheese_per_capita,df$djia_dec)^2 %>% round(2)`.
+
+R^2 for the first differences is `r cor(df_first_diff$fd_us_cheese,df_first_diff$fd_djia_dec)^2 %>% round(2)`.

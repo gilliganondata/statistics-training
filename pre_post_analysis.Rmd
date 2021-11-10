@@ -1,0 +1,86 @@
+---
+title: "Pre-/Post-Analysis"
+output: html_notebook
+---
+
+Show examples of how we expect data to look and how it winds up looking
+
+```{r echo = FALSE}
+
+if (!require("pacman")) install.packages("pacman")
+pacman::p_load(tidyverse,
+               scales,
+               lubridate)
+
+start_date <- Sys.Date() - 90
+end_date <- Sys.Date() - 15
+event_date <- Sys.Date() - 45
+
+num_rows <- as.numeric(end_date - start_date + 1, units = "days")
+base_mean <- 1200
+low_change <- 200
+high_change <- 500
+
+set.seed(6170)
+
+theme_main <-  theme_minimal() +
+  theme(text = element_text("Lato"),
+        axis.title = element_blank(),
+        axis.line.y = element_blank(),
+        axis.line.x = element_line(color = "gray60"),
+        panel.grid.major.x = element_blank(),
+        panel.grid.minor.x = element_blank())
+
+
+# Generate Data
+df <- tibble(date = seq(start_date, end_date, by = 1)) 
+
+# Add a low-variance and high-variance base series
+df$low_var <- rnorm(num_rows, mean = base_mean, sd = 40) %>% round(0)
+df$high_var <- rnorm(num_rows, mean = base_mean, sd = 250) %>% round(0)
+
+# Make different versions
+df <- df %>% 
+  mutate(low_var_low_chg = ifelse(date <= event_date, low_var, low_var + low_change),
+         low_var_high_chg = ifelse(date <= event_date, low_var, low_var + high_change),
+         high_var_low_chg = ifelse(date <= event_date, high_var, high_var + low_change),
+         high_var_high_chg = ifelse(date <= event_date, high_var, high_var + high_change),
+         test = ifelse(date <= event_date, high_var, NA))
+
+# Make a long version
+df_long <- df %>% 
+  select(-low_var, -high_var) %>%  # These are just the "base" values
+  pivot_longer(-date, names_to = "series", values_to = "value")
+
+
+```
+
+Make the plots
+
+```{r line_plots, fig.height = 1.25, fig.width = 3, echo = FALSE}
+
+get_plot <- function(df = df_long, series_filter = "low_var_low_chg", 
+                     y_max = max(df_long$value, na.rm = TRUE) + 10){
+  
+  df <- df %>% filter(series == series_filter)
+  
+  gg <- ggplot(df, aes(x = date, y = value, group = 1)) +
+    geom_vline(aes(xintercept = event_date), linetype = "dashed", color = "#EF7D22", size = 0.8) +
+    geom_line(size = 0.6, color = "#009CAB") +
+    geom_text(data = tibble(x = event_date + 1, y = 350, label = "New Feature Rolled Out"),
+               mapping = aes(x = x, y = y, label = label), family = "Lato", hjust = 0, color = "#EF7D22") + 
+    scale_y_continuous(expand = c(0,0), limits = c(0, y_max), labels = comma) +
+    theme_main
+  
+  gg
+  
+}
+
+get_plot(df_long, "low_var_high_chg")
+get_plot(df_long, "low_var_low_chg")
+get_plot(df_long, "high_var_high_chg")
+get_plot(df_long, "high_var_low_chg")
+get_plot(df_long, "test")
+
+
+```

@@ -1,0 +1,26 @@
+---
+title: "Multicollinearity"
+output: html_notebook
+---
+
+Trying to illustrate multicollinearity. 
+
+```{r}
+library(tidyverse)
+
+df <- read_csv("data/weight-height.csv")
+
+```
+
+Plot
+
+```{r}
+
+ggplot(df, aes(x = Height, y = Weight)) +
+  geom_point(size = 0.3, color = "#009CAB", alpha = 0.6) +
+  theme_minimal()
+
+model
+
+
+```
