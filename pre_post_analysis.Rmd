@@ -12,9 +12,9 @@ pacman::p_load(tidyverse,
                scales,
                lubridate)
 
-start_date <- Sys.Date() - 90
-end_date <- Sys.Date() - 15
-event_date <- Sys.Date() - 45
+start_date <- Sys.Date() - 90 - 1
+end_date <- Sys.Date() - 15 - 1
+event_date <- Sys.Date() - 45 - 1
 
 num_rows <- as.numeric(end_date - start_date + 1, units = "days")
 base_mean <- 1200
@@ -45,7 +45,24 @@ df <- df %>%
          low_var_high_chg = ifelse(date <= event_date, low_var, low_var + high_change),
          high_var_low_chg = ifelse(date <= event_date, high_var, high_var + low_change),
          high_var_high_chg = ifelse(date <= event_date, high_var, high_var + high_change),
-         test = ifelse(date <= event_date, high_var, NA))
+         test_pre = ifelse(date <= event_date, high_var, NA),
+         test_control = ifelse(date <= event_date, NA, high_var/2),
+         test_challenge = ifelse(date <= event_date, NA, high_var/2 + high_change/2))
+
+# Adjust the test/control a bit. We're just going to add the 
+# value to one and subtract from the other to make them look a little better
+test_adjust <- runif(num_rows, -50, 50) %>% round(0)
+df$test_control <- df$test_control + test_adjust
+df$test_challenge <- df$test_challenge - test_adjust
+
+mean_control <- mean(df$test_control, na.rm = TRUE) %>% round(0)
+mean_challenge <- mean(df$test_challenge, na.rm = TRUE) %>% round(0)
+
+# Get the means added
+df <- df %>% 
+  mutate(test_control_mean = ifelse(date <= event_date, NA, mean_control),
+         test_challenge_mean = ifelse(date <= event_date, NA, mean_challenge))
+
 
 # Make a long version
 df_long <- df %>% 
@@ -68,7 +85,7 @@ get_plot <- function(df = df_long, series_filter = "low_var_low_chg",
     geom_vline(aes(xintercept = event_date), linetype = "dashed", color = "#EF7D22", size = 0.8) +
     geom_line(size = 0.6, color = "#009CAB") +
     geom_text(data = tibble(x = event_date + 1, y = 350, label = "New Feature Rolled Out"),
-               mapping = aes(x = x, y = y, label = label), family = "Lato", hjust = 0, color = "#EF7D22") + 
+              mapping = aes(x = x, y = y, label = label), family = "Lato", hjust = 0, color = "#EF7D22") + 
     scale_y_continuous(expand = c(0,0), limits = c(0, y_max), labels = comma) +
     theme_main
   
@@ -80,7 +97,24 @@ get_plot(df_long, "low_var_high_chg")
 get_plot(df_long, "low_var_low_chg")
 get_plot(df_long, "high_var_high_chg")
 get_plot(df_long, "high_var_low_chg")
-get_plot(df_long, "test")
+get_plot(df_long, "test_pre")
 
+# Plotting the test is going to be a bit different
+df_test <- df_long %>% filter(grepl("test", series))
+
+gg <- ggplot(df_test, aes(x = date, y = value, color = series, linetype = series, size = series)) +
+  geom_vline(aes(xintercept = event_date), linetype = "dashed", color = "#EF7D22", size = 0.8) +
+  geom_line() +
+  geom_text(data = tibble(x = event_date + 1, y = 350, label = "New Feature Rolled Out",
+                          series = NA),
+            mapping = aes(x = x, y = y, label = label), family = "Lato", hjust = 0, color = "#EF7D22") +
+  scale_y_continuous(expand = c(0,0), limits = c(0, max(df_long$value, na.rm = TRUE) + 10), labels = comma) +
+  scale_color_manual(values = c("#E66420", "gray60", "#004D53", "gray60", "#009CAB")) +
+  scale_linetype_manual(values = c("solid", "dashed", "solid", "dashed", "solid")) +
+  scale_size_manual(values = c(0.6, 0.4, 0.6, 0.4, 0.6)) +
+  theme_main +
+  theme(legend.position = "none")
+
+gg
 
 ```
